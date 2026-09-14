@@ -1,0 +1,295 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comparador de energía | Boltian Group</title>
+<meta name="description" content="Sube tu factura de luz, compara las principales tarifas 24 horas y descubre cuánto puedes ahorrar con Boltian.">
+<style>
+:root{
+  --bg:#07111f;--card:#0d1c2f;--line:#20334b;--txt:#f7fbff;
+  --muted:#9db0c5;--g:#5ff28b;--c:#20d5ff;--danger:#ff7272
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#07111f,#040a12);color:var(--txt);font-family:Inter,Arial,sans-serif}
+main{max-width:980px;margin:auto;padding:42px 20px 80px}
+.brand{font-weight:900;letter-spacing:.15em}.brand b{color:var(--c)}
+.hero{text-align:center;padding:48px 0 24px}
+.hero h1{font-size:clamp(38px,7vw,66px);line-height:1;margin:15px 0}
+.hero h1 span{color:var(--g)}
+.hero p{color:var(--muted);font-size:18px;line-height:1.6;max-width:760px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:24px;margin-top:26px;box-shadow:0 30px 80px #0007}
+.drop{display:block;border:2px dashed #2b6780;border-radius:20px;padding:44px 20px;text-align:center;cursor:pointer;background:#0a1728}
+.drop strong{color:var(--c)}
+#file{display:none}
+.status{margin:14px 0 0;color:var(--muted);min-height:22px}
+.spinner{display:none;margin:18px auto 0;width:30px;height:30px;border:3px solid #264056;border-top-color:var(--c);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.form,.results,.leadbox,.success{display:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{font-size:12px;color:var(--muted)}
+input{width:100%;margin-top:6px;padding:13px;border-radius:11px;border:1px solid var(--line);background:#081321;color:#fff;font-size:16px}
+button{border:0;border-radius:12px;padding:14px 18px;font-weight:900;cursor:pointer;background:linear-gradient(90deg,var(--g),var(--c));color:#05111c;margin-top:16px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.m{padding:18px;background:#091726;border:1px solid var(--line);border-radius:16px}
+.m small{color:var(--muted)}.m b{display:block;font-size:24px;margin-top:6px}
+.green{color:var(--g)}
+.offer{display:grid;grid-template-columns:38px 1.4fr 1fr 1fr auto;gap:12px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:16px;margin-top:10px;background:#091726}
+.offer:first-child{border-color:#3d8b65}
+.rank{font-weight:900}
+.offer small{display:block;color:var(--muted);margin-top:3px}
+.offer button{margin:0;padding:11px 12px}
+.note{font-size:12px;color:#7f95aa;line-height:1.5;margin-top:16px}
+.selected{padding:15px;border-radius:14px;background:#081727;border:1px solid #2a5063;margin-bottom:16px}
+.checkrow{display:flex;gap:10px;align-items:flex-start;margin-top:16px;color:#b8c6d5;font-size:13px;line-height:1.5}
+.checkrow input{width:auto;margin:2px 0 0;flex:none}
+.checkrow a{color:var(--c)}
+.error{color:var(--danger)}
+.success{border-color:#347a52;background:#0a241a}
+.success h2{color:var(--g)}
+@media(max-width:700px){
+  .grid,.summary{grid-template-columns:1fr}
+  .offer{grid-template-columns:32px 1fr}
+  .offer .cost,.offer .save,.offer button{grid-column:2}
+  .hero{padding-top:32px}
+}
+</style>
+</head>
+<body>
+<main>
+<div class="brand">BOLTIAN <b>GROUP</b></div>
+
+<section class="hero">
+  <div>⚡ COMPARADOR INTELIGENTE</div>
+  <h1>Sube tu factura.<br><span>Descubre tu ahorro.</span></h1>
+  <p>Analizamos tu factura y comparamos Gana Energía, Nordy, Naturgy, Endesa, Iberdrola y Repsol en tarifas de precio fijo 24 horas.</p>
+</section>
+
+<section class="card">
+  <label class="drop" for="file">
+    <div style="font-size:38px">⇧</div>
+    <h2>Sube tu factura de luz</h2>
+    <div>PDF, JPG, PNG o WEBP · <strong>Seleccionar archivo</strong></div>
+  </label>
+  <input id="file" type="file" accept=".pdf,image/jpeg,image/png,image/webp">
+  <div class="spinner" id="spin"></div>
+  <div class="status" id="status">Analizaremos la factura para realizar la comparativa. No se almacena de forma permanente.</div>
+
+  <div class="form" id="form">
+    <h2>Comprueba los datos detectados</h2>
+    <p style="color:var(--muted)">Corrige cualquier dato si fuera necesario antes de comparar.</p>
+    <div class="grid">
+      <div><label>Consumo del periodo (kWh)<input id="consumo" type="number" step=".01"></label></div>
+      <div><label>Días facturados<input id="dias" type="number" value="30"></label></div>
+      <div><label>Potencia P1 (kW)<input id="p1" type="number" step=".001"></label></div>
+      <div><label>Potencia P2 (kW)<input id="p2" type="number" step=".001"></label></div>
+      <div><label>Total factura actual (€)<input id="total" type="number" step=".01"></label></div>
+      <div><label>Compañía actual<input id="actual" type="text"></label></div>
+    </div>
+    <button id="compare" type="button">COMPARAR AHORA</button>
+  </div>
+</section>
+
+<section class="card results" id="results">
+  <h2>Resultado Boltian</h2>
+  <div class="summary">
+    <div class="m"><small>Coste anual actual</small><b id="ca">—</b></div>
+    <div class="m"><small>Mejor coste anual</small><b id="ba">—</b></div>
+    <div class="m"><small>Ahorro máximo</small><b class="green" id="sa">—</b></div>
+  </div>
+  <div id="offers"></div>
+  <div class="note">Estimación comparativa basada en el consumo y potencia indicados. El importe final puede variar por impuestos, promociones, servicios, alquiler de contador y condiciones particulares. Boltian confirmará la oferta vigente antes de tramitar el cambio.</div>
+</section>
+
+<section class="card leadbox" id="leadbox">
+  <h2>Solicitar esta oferta</h2>
+  <div class="selected" id="selectedText"></div>
+
+  <div class="grid">
+    <div><label>Nombre y apellidos<input id="nombre" type="text" autocomplete="name" maxlength="100"></label></div>
+    <div><label>Teléfono<input id="telefono" type="tel" autocomplete="tel" maxlength="25"></label></div>
+    <div style="grid-column:1/-1"><label>Email<input id="email" type="email" autocomplete="email"></label></div>
+  </div>
+
+  <label class="checkrow">
+    <input id="privacidad" type="checkbox">
+    <span>He leído y acepto la <a href="/privacidad" target="_blank" rel="noopener">política de privacidad</a> y autorizo a Boltian a tratar mis datos y la factura aportada para analizar y gestionar mi solicitud.</span>
+  </label>
+
+  <button id="sendLead" type="button">ENVIAR SOLICITUD A BOLTIAN</button>
+  <div class="status" id="leadStatus"></div>
+</section>
+
+<section class="card success" id="success">
+  <h2>✓ Solicitud recibida</h2>
+  <p>Hemos recibido tus datos y tu factura. El equipo de Boltian revisará la oferta antes de gestionar cualquier cambio.</p>
+</section>
+
+</main>
+
+<script>
+const q = id => document.getElementById(id);
+const money = n => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(n);
+
+let invoiceFile = null;
+let selectedOffer = null;
+
+q('file').onchange = async e => {
+  const f = e.target.files[0];
+  if(!f) return;
+
+  invoiceFile = f;
+  selectedOffer = null;
+  q('spin').style.display='block';
+  q('form').style.display='none';
+  q('results').style.display='none';
+  q('leadbox').style.display='none';
+  q('success').style.display='none';
+  q('status').className='status';
+  q('status').textContent='Analizando '+f.name+'…';
+
+  const fd = new FormData();
+  fd.append('file', f);
+
+  try{
+    const r = await fetch('/api/analyze',{method:'POST',body:fd});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || 'No se pudo analizar');
+
+    q('consumo').value=d.consumo_kwh??'';
+    q('dias').value=d.dias??30;
+    q('p1').value=d.potencia_p1??'';
+    q('p2').value=d.potencia_p2??'';
+    q('total').value=d.total_factura??'';
+    q('actual').value=d.comercializadora_actual??'';
+
+    q('form').style.display='block';
+    q('status').textContent='Factura leída. Revisa los datos y pulsa comparar.';
+  }catch(err){
+    q('form').style.display='block';
+    q('status').className='status error';
+    q('status').textContent='No he podido completar la lectura automática: '+err.message+'. Puedes introducir los datos manualmente.';
+  }finally{
+    q('spin').style.display='none';
+  }
+};
+
+q('compare').onclick = async () => {
+  const payload = {
+    consumo_kwh:+q('consumo').value,
+    dias:+q('dias').value,
+    potencia_p1:+q('p1').value,
+    potencia_p2:+q('p2').value,
+    total_factura:+q('total').value,
+    comercializadora_actual:q('actual').value
+  };
+
+  const r = await fetch('/api/compare',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+
+  const d = await r.json();
+  if(!r.ok){
+    q('status').className='status error';
+    q('status').textContent=d.detail||'Revisa los datos.';
+    return;
+  }
+
+  q('ca').textContent=money(d.coste_anual_actual);
+  q('ba').textContent=money(d.ofertas[0].coste_anual);
+  q('sa').textContent=(d.mejor_ahorro>0?money(d.mejor_ahorro):'Sin ahorro')+'/año';
+
+  q('offers').innerHTML=d.ofertas.map((x,i)=>`
+    <div class="offer">
+      <div class="rank">${i+1}</div>
+      <div><b>${x.company}</b><small>${x.plan}</small></div>
+      <div class="cost"><small>Estimado</small><b>${money(x.coste_mensual)}/mes</b></div>
+      <div class="save"><small>${x.ahorro_anual>=0?'Ahorro':'Diferencia'}</small><b class="${x.ahorro_anual>=0?'green':''}">${money(Math.abs(x.ahorro_anual))}/año</b></div>
+      <button type="button" onclick='selectOffer(${JSON.stringify(JSON.stringify(x))})'>QUIERO ESTA</button>
+    </div>
+  `).join('');
+
+  q('results').style.display='block';
+  q('leadbox').style.display='none';
+  q('results').scrollIntoView({behavior:'smooth'});
+};
+
+function selectOffer(serialized){
+  selectedOffer=JSON.parse(serialized);
+  q('selectedText').innerHTML=`
+    <b>${selectedOffer.company} — ${selectedOffer.plan}</b><br>
+    Coste estimado: ${money(selectedOffer.coste_mensual)}/mes ·
+    Ahorro estimado: <span class="green"><b>${money(selectedOffer.ahorro_anual)}/año</b></span>
+  `;
+  q('leadbox').style.display='block';
+  q('leadStatus').textContent='';
+  q('leadbox').scrollIntoView({behavior:'smooth'});
+}
+
+q('sendLead').onclick = async () => {
+  if(!invoiceFile){
+    q('leadStatus').className='status error';
+    q('leadStatus').textContent='Vuelve a seleccionar la factura.';
+    return;
+  }
+  if(!selectedOffer){
+    q('leadStatus').className='status error';
+    q('leadStatus').textContent='Selecciona una oferta.';
+    return;
+  }
+  if(!q('nombre').value.trim() || !q('telefono').value.trim() || !q('email').value.trim()){
+    q('leadStatus').className='status error';
+    q('leadStatus').textContent='Completa nombre, teléfono y email.';
+    return;
+  }
+  if(!q('privacidad').checked){
+    q('leadStatus').className='status error';
+    q('leadStatus').textContent='Debes aceptar la política de privacidad.';
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('nombre',q('nombre').value.trim());
+  fd.append('telefono',q('telefono').value.trim());
+  fd.append('email',q('email').value.trim());
+  fd.append('privacidad','true');
+
+  fd.append('comercializadora_actual',q('actual').value);
+  fd.append('consumo_kwh',q('consumo').value);
+  fd.append('dias',q('dias').value);
+  fd.append('potencia_p1',q('p1').value);
+  fd.append('potencia_p2',q('p2').value);
+  fd.append('total_factura',q('total').value);
+
+  fd.append('selected_company',selectedOffer.company);
+  fd.append('selected_plan',selectedOffer.plan);
+  fd.append('selected_saving',selectedOffer.ahorro_anual);
+  fd.append('selected_cost_month',selectedOffer.coste_mensual);
+  fd.append('factura',invoiceFile);
+
+  q('sendLead').disabled=true;
+  q('leadStatus').className='status';
+  q('leadStatus').textContent='Enviando solicitud…';
+
+  try{
+    const r=await fetch('/api/lead',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.detail||'No se pudo enviar la solicitud');
+
+    q('leadbox').style.display='none';
+    q('success').style.display='block';
+    q('success').scrollIntoView({behavior:'smooth'});
+  }catch(err){
+    q('leadStatus').className='status error';
+    q('leadStatus').textContent=err.message;
+  }finally{
+    q('sendLead').disabled=false;
+  }
+};
+</script>
+</body>
+</html>
