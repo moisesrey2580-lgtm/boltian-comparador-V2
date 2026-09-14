@@ -117,53 +117,113 @@ def first(patterns, text):
     return None
 
 
+def _line_numbers(line: str):
+    """Números de una línea de factura, respetando formato ES (29.218 = 29218)."""
+    return [clean_num(x) for x in re.findall(r"(?<![A-Za-z])\d{1,3}(?:[\. ]\d{3})*(?:,\d+)?|(?<![A-Za-z])\d+(?:[\.,]\d+)?", line)]
+
+
+def _period_consumptions(text: str):
+    """Extrae consumos P1/P2/P3 de tablas de lecturas.
+
+    En muchas facturas cada fila es: P1 | lectura anterior | lectura actual | CONSUMO.
+    Por eso el consumo correcto es el último número de la fila, no la primera lectura.
+    """
+    found = {}
+    lines = [re.sub(r"\s+", " ", x).strip() for x in text.splitlines() if x.strip()]
+    for line in lines:
+        m = re.match(r"^P\s*([123])\b(.*)$", line, flags=re.I)
+        if not m:
+            continue
+        nums = _line_numbers(m.group(2))
+        nums = [n for n in nums if n is not None]
+        if not nums:
+            continue
+        # Si hay lecturas anterior/actual + consumo, el consumo es el último valor.
+        # Filtramos valores razonables de energía del periodo.
+        candidate = nums[-1]
+        if 0 <= candidate < 100000:
+            found[f"p{m.group(1)}"] = candidate
+    return found
+
+
+def _contracted_powers(text: str):
+    """Busca potencia contratada P1/P2 evitando confundirla con consumos P1/P2."""
+    t = re.sub(r"[ \t]+", " ", text)
+    # Bloques habituales: "Potencia contratada P1 5,5 kW P2 5,5 kW"
+    patterns = [
+        r"potencia\s+contratada[\s\S]{0,180}?P\s*1[^0-9]{0,25}([\d\.,]+)\s*kW[\s\S]{0,100}?P\s*2[^0-9]{0,25}([\d\.,]+)\s*kW",
+        r"potencias?\s+contratadas?[\s\S]{0,180}?P\s*1[^0-9]{0,25}([\d\.,]+)[\s\S]{0,80}?P\s*2[^0-9]{0,25}([\d\.,]+)",
+        r"P\s*1\s*[:\-]?\s*([\d\.,]+)\s*kW[\s\S]{0,80}?P\s*2\s*[:\-]?\s*([\d\.,]+)\s*kW",
+    ]
+    for pat in patterns:
+        m = re.search(pat, t, flags=re.I)
+        if m:
+            a, b = clean_num(m.group(1)), clean_num(m.group(2))
+            if a and b and 0.1 <= a <= 30 and 0.1 <= b <= 30:
+                return a, b
+
+    # Algunas facturas imprimen una sola potencia para ambos periodos.
+    m = re.search(r"potencia\s+contratada[^0-9]{0,50}([\d\.,]+)\s*kW", t, flags=re.I)
+    if m:
+        a = clean_num(m.group(1))
+        if a and 0.1 <= a <= 30:
+            return a, a
+    return None, None
+
+
+def _billing_days(text: str):
+    # Primero, si la factura declara expresamente los días.
+    val = first([
+        r"(?:n[uú]mero\s+de\s+d[ií]as|d[ií]as\s+facturados|periodo\s+facturado)[^0-9]{0,25}(\d{1,3})\s*d[ií]as?",
+        r"(\d{1,3})\s*d[ií]as?\s+facturados",
+    ], text)
+    if val and 1 <= val <= 120:
+        return int(val)
+
+    # Si no, calcula entre fechas cercanas a "periodo de facturación".
+    from datetime import datetime
+    m = re.search(
+        r"(?:periodo\s+(?:de\s+)?facturaci[oó]n|periodo\s+facturado)[\s\S]{0,100}?(\d{1,2}/\d{1,2}/\d{4})[\s\S]{0,40}?(\d{1,2}/\d{1,2}/\d{4})",
+        text, flags=re.I)
+    if m:
+        try:
+            d1=datetime.strptime(m.group(1), "%d/%m/%Y")
+            d2=datetime.strptime(m.group(2), "%d/%m/%Y")
+            days=(d2-d1).days
+            if 1 <= days <= 120:
+                return days
+        except ValueError:
+            pass
+    return None
+
+
 def extract_fields(text: str):
     t = re.sub(r"[ \t]+", " ", text)
     upper = t.upper()
 
+    periods = _period_consumptions(text)
+    period_sum = sum(periods.values()) if periods else None
+
+    # Preferimos un total explícito. Si no existe, sumamos P1+P2+P3 de la tabla.
     consumo = first([
         r"consumo(?:\s+total|\s+facturado|\s+de\s+energ[ií]a)?[^0-9]{0,45}([\d\.,]+)\s*kWh",
         r"energ[ií]a\s+consumida[^0-9]{0,45}([\d\.,]+)\s*kWh",
         r"consumo\s+en\s+el\s+periodo[^0-9]{0,45}([\d\.,]+)\s*kWh",
     ], t)
+    # Si el "total" capturado no concuerda con una tabla P1/P2/P3 clara, manda la tabla.
+    if period_sum and (not consumo or abs(consumo-period_sum) > max(2, period_sum*0.03)):
+        consumo = period_sum
 
-    if not consumo:
-        vals = []
-        for match in re.finditer(
-            r"(?:P[123]|punta|llano|valle)[^0-9]{0,35}([\d\.,]+)\s*kWh",
-            t,
-            flags=re.I,
-        ):
-            value = clean_num(match.group(1))
-            if value and 0 < value < 100000:
-                vals.append(value)
-        if 2 <= len(vals) <= 6:
-            consumo = sum(vals[:3])
-
-    pvals = []
-    for match in re.finditer(
-        r"potencia(?:\s+contratada)?[^0-9]{0,50}([\d\.,]+)\s*kW",
-        t,
-        flags=re.I,
-    ):
-        value = clean_num(match.group(1))
-        if value and 0.1 <= value <= 30:
-            pvals.append(value)
-
-    p1 = pvals[0] if pvals else None
-    p2 = pvals[1] if len(pvals) > 1 else p1
+    p1, p2 = _contracted_powers(text)
 
     total = first([
         r"total\s+(?:factura|a\s+pagar|importe)[^0-9]{0,35}([\d\.,]+)\s*€",
         r"importe\s+total[^0-9]{0,35}([\d\.,]+)\s*€",
+        r"importe\s+de\s+(?:su|la)\s+factura[^0-9]{0,20}([\d\.,]+)\s*€",
         r"total[^0-9]{0,20}([\d\.,]+)\s*€",
     ], t)
 
-    dias = first([
-        r"(?:n[uú]mero\s+de\s+d[ií]as|d[ií]as\s+facturados)[^0-9]{0,20}(\d{1,3})",
-        r"periodo[^0-9]{0,60}(\d{1,3})\s*d[ií]as",
-    ], t)
-    dias = int(dias) if dias and 1 <= dias <= 120 else None
+    dias = _billing_days(text)
 
     providers = [
         "GANA ENERGÍA", "GANA ENERGIA", "NORDY",
@@ -174,14 +234,18 @@ def extract_fields(text: str):
         current = "Gana Energía"
 
     return {
-        "consumo_kwh": round(consumo, 2) if consumo else None,
-        "dias": dias or 30,
+        "consumo_kwh": round(consumo, 2) if consumo is not None else None,
+        "consumo_p1": round(periods.get("p1"), 2) if periods.get("p1") is not None else None,
+        "consumo_p2": round(periods.get("p2"), 2) if periods.get("p2") is not None else None,
+        "consumo_p3": round(periods.get("p3"), 2) if periods.get("p3") is not None else None,
+        "dias": dias,
         "potencia_p1": round(p1, 3) if p1 else None,
         "potencia_p2": round(p2, 3) if p2 else None,
         "total_factura": round(total, 2) if total else None,
         "comercializadora_actual": current,
         "confidence": {
             "consumo_kwh": bool(consumo),
+            "consumos_periodo": bool(periods),
             "dias": bool(dias),
             "potencia_p1": bool(p1),
             "potencia_p2": bool(p2),
